@@ -22,7 +22,8 @@ export class UsersService {
         updatedAt: new Date(),
       };
       this.users.push(newUser);
-      return newUser;
+      const { password, ...userWithoutPassword } = newUser;
+      return userWithoutPassword as User;
     } catch (error) {
       console.error('Error creating user:', error);
       throw error;

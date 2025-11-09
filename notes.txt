@@ -1,0 +1,20 @@
+we add docker image to start postgres
+
+docker run --name exilehub-db `
+  -e POSTGRES_USER= type one user `
+  -e POSTGRES_PASSWORD= type one pass `
+  -e POSTGRES_DB=exilehub `
+  -p 5432:5432 `
+  -d postgres
+
+ this if we have running docker will create one image with name exilehub-db and set the password to 123456 and user to postgres and db to exilehub and expose port 5432
+
+Then we update the .env file with the correct DATABASE_URL
+
+
+if there is some problems with the postgres connection try:
+docker ps in bash
+
+after this:
+
+docker inspect exilehub-db --format='{{range .Config.Env}}{{println .}}{{end}}'

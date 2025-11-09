@@ -1,0 +1,29 @@
+# Base image
+FROM node:20-alpine
+
+WORKDIR /usr/src/app
+
+# Install OS dependencies only once
+RUN apk add --no-cache netcat-openbsd
+
+# 1️⃣ Copy only dependency files first (so Docker can cache npm install)
+COPY package*.json ./
+
+# 2️⃣ Install deps (cached unless package.json changes)
+RUN npm install
+
+
+# 3️⃣ Install Nest CLI globally (optional)
+RUN npm install -g @nestjs/cli
+
+# 4️⃣ Copy everything else
+COPY . .
+
+# 5️⃣ Copy entrypoint and make it executable
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+EXPOSE 3000 5555
+
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["npm", "run", "start:dev"]
