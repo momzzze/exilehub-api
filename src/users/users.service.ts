@@ -1,28 +1,37 @@
-import { Injectable } from '@nestjs/common';
-import { User } from './users.types';
-import { CreateUserDto } from './dto/create-user.dto';
+import { ConflictException, Injectable } from '@nestjs/common';
+import { CreateUserDto } from './dto/create-user.dto.js';
 import * as bcrypt from 'bcrypt';
+import { UpdateUserDto } from './dto/update-user-dto.js';
+import { User } from './user.entity.js';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class UsersService {
-  private users: User[] = [];
-  private idCounter = 1;
+  constructor(
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+  ) {}
 
-  async create(dto: CreateUserDto): Promise<User> {
+  async create(dto: CreateUserDto): Promise<Omit<User, 'password'>> {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(dto.password, saltRounds);
 
     try {
-      const newUser: User = {
-        id: this.idCounter++,
-        username: dto.username,
-        email: dto.email,
+      const existingUser = await this.userRepository.findOne({
+        where: [{ username: dto.username }, { email: dto.email }],
+      });
+
+      if (existingUser) {
+        throw new ConflictException('Username or email already exists.');
+      }
+
+      const user = this.userRepository.create({
+        ...dto,
         password: hashedPassword,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      this.users.push(newUser);
-      const { password, ...userWithoutPassword } = newUser;
+      });
+      const savedUser = await this.userRepository.save(user);
+      const { password, ...userWithoutPassword } = savedUser;
       return userWithoutPassword as User;
     } catch (error) {
       console.error('Error creating user:', error);
@@ -30,49 +39,62 @@ export class UsersService {
     }
   }
 
-  findAll(): User[] {
+  async findAll() {
     try {
-      return this.users;
+      const users = await this.userRepository.find();
+      return users.map(({ password, ...safeUser }) => safeUser);
     } catch (error) {
       console.error('Error finding users:', error);
       return [];
     }
   }
 
-  findOne(id: number): User | undefined {
+  async findOne(id: number) {
+    if (!id) {
+      return null;
+    }
     try {
-      return this.users.find((user) => user.id === id);
+      const user = await this.userRepository.findOneBy({ id });
+      if (!user) return null;
+
+      const { password, ...safeUser } = user;
+      return safeUser;
     } catch (error) {
       console.error('Error finding user:', error);
-      return undefined;
+      throw error;
     }
   }
 
-  remove(id: number): boolean {
+  async remove(id: number): Promise<{ success: boolean }> {
     try {
-      const userIndex = this.users.findIndex((user) => user.id === id);
-      if (userIndex !== -1) {
-        this.users.splice(userIndex, 1);
-        return true;
-      }
-      return false;
+      await this.userRepository.delete(id);
+      return { success: true };
     } catch (error) {
       console.error('Error removing user:', error);
-      return false;
+      throw error;
     }
   }
 
-  update(id: number, dto: Partial<CreateUserDto>): User | undefined {
+  async update(
+    id: number,
+    dto: UpdateUserDto,
+  ): Promise<Omit<User, 'password'>> {
     try {
-      const user = this.findOne(id);
-      if (user) {
-        Object.assign(user, dto, { updatedAt: new Date() });
-        return user;
+      await this.userRepository.update(id, {
+        ...dto,
+        updatedAt: new Date(),
+      });
+
+      const updated = await this.userRepository.findOne({ where: { id } });
+      if (!updated) {
+        throw new Error(`User with ID ${id} not found`);
       }
-      return undefined;
+
+      const { password, ...safeUser } = updated;
+      return safeUser;
     } catch (error) {
       console.error('Error updating user:', error);
-      return undefined;
+      throw error;
     }
   }
 }
